@@ -1,4 +1,4 @@
-name: Build APK with Docker
+name: Build APK Manual
 
 on:
   workflow_dispatch:
@@ -8,21 +8,64 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Build APK with Flet Docker image
+    - uses: actions/checkout@v4
+    
+    - name: Install system dependencies
       run: |
-        docker run --rm \
-          -v ${{ github.workspace }}:/app \
-          -w /app \
-          ghcr.io/flet-dev/flet:latest \
-          bash -c "pip install --upgrade pip && pip install flet && flet build apk"
-          
-    - name: Upload APK
+        sudo apt-get update
+        sudo apt-get install -y curl git unzip xz-utils zip libglu1-mesa
+        
+    - name: Setup Java
+      run: |
+        sudo apt-get install -y openjdk-17-jdk
+        echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+        
+    - name: Setup Android SDK
+      run: |
+        mkdir -p $HOME/android-sdk
+        cd $HOME/android-sdk
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        unzip -q commandlinetools-linux-11076708_latest.zip
+        echo "y" | cmdline-tools/bin/sdkmanager --sdk_root=$HOME/android-sdk "platforms;android-33" "build-tools;30.0.3"
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+        
+    - name: Setup Flutter
+      run: |
+        git clone https://github.com/flutter/flutter.git --depth 1 -b stable
+        echo "$GITHUB_WORKSPACE/flutter/bin" >> $GITHUB_PATH
+        flutter precache
+        
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install Flet
+      run: |
+        pip install --upgrade pip
+        pip install flet
+        
+    - name: Verify installation
+      run: |
+        flutter doctor
+        java -version
+        echo $ANDROID_HOME
+        flet --version
+        
+    - name: Build APK
+      run: flet build apk --verbose
+      
+    - name: Find and upload APK
+      run: |
+        find . -name "*.apk" -exec cp {} ./app.apk \;
+        ls -la *.apk || echo "No APK found"
+      continue-on-error: true
+      
+    - name: Upload
       uses: actions/upload-artifact@v4
       with:
         name: stock-app
         path: |
-          build/apk/*.apk
+          *.apk
           **/*.apk
