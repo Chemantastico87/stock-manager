@@ -1,50 +1,28 @@
-name: Build APK
+name: Build APK with Docker
+
 on:
   workflow_dispatch:
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Flutter
-        run: |
-          git clone https://github.com/flutter/flutter.git --depth 1 -b stable
-          echo "$GITHUB_WORKSPACE/flutter/bin" >> $GITHUB_PATH
-
-      - name: Install Flet
-        run: |
-          pip install --upgrade pip
-          pip install flet
-
-      - name: Verify Flutter & Flet
-        run: |
-          flutter doctor
-          flet --version
-
-      - name: Build APK
-        run: flet build apk --verbose
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: stock-manager
-          path: build/apk/*.apk
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Build APK with Flet Docker image
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/app \
+          -w /app \
+          ghcr.io/flet-dev/flet:latest \
+          bash -c "pip install --upgrade pip && pip install flet && flet build apk"
+          
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: stock-app
+        path: |
+          build/apk/*.apk
+          **/*.apk
